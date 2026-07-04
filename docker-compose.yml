@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # 1. Managed MySQL Instance
+  db:
+    image: mysql:8.0
+    container_name: credishield_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: credishield
+      MYSQL_ROOT_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # 2. Redis Message Broker & Cache
+  redis:
+    image: redis:7-alpine
+    container_name: credishield_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # 3. FastAPI REST API Service
+  backend:
+    build: ./backend
+    container_name: credishield_backend
+    restart: always
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@db:3306/credishield
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=supersecretkey_replace_in_production_1234567890
+    volumes:
+      - ./backend/app/static_reports:/backend/app/static_reports
+
+  # 4. Celery Background Worker
+  celery_worker:
+    build: ./backend
+    container_name: credishield_celery_worker
+    restart: always
+    command: celery -A app.workers.celery_app.celery_worker worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@db:3306/credishield
+      - REDIS_URL=redis://redis:6379/0
+
+  # 5. React Frontend Served via Nginx
+  frontend:
+    build: ./frontend
+    container_name: credishield_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+
+volumes:
+  mysql_data:
