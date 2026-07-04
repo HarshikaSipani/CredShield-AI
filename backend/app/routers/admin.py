@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, UploadFile, File
@@ -10,6 +11,10 @@ from ..models.user import User
 from ..schemas.audit_log import AuditLogResponse, AuditLogPaginatedResponse
 from ..schemas.fraud_rule import FraudRuleCreate, FraudRuleUpdate, FraudRuleResponse, FraudRuleListResponse
 from .deps import get_current_user, RoleChecker
+
+# Dynamic dataset path relative to root directory (works on Windows/Linux)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+csv_path = os.path.join(BASE_DIR, "cs-training.csv")
 
 router = APIRouter(prefix="/admin", tags=["Administrator Settings"])
 
@@ -105,9 +110,14 @@ def run_retrain_script():
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "ml", "train.py"
         )
-        # Execute training script
-        subprocess.run(["python", script_path], check=True)
+        # Execute training script using the running Python interpreter path (works on Windows & Render/Linux)
+        subprocess.run([sys.executable, script_path], check=True)
         print("Asynchronous model retraining completed successfully.")
+        
+        # Reload newly generated binary models in memory
+        from ..services.model_service import model_service
+        model_service._load_assets()
+        print("Model assets reloaded successfully in server memory.")
     except Exception as e:
         print(f"Error during background model retraining: {e}")
 
@@ -134,8 +144,7 @@ def upload_dataset(
             detail="Invalid file format. Only CSV datasets are accepted."
         )
         
-    # Write uploaded dataset over existing training path
-    csv_path = "e:\\cs-training.csv"
+    # Write uploaded dataset over existing training path (resolves to dynamic root path)
     try:
         with open(csv_path, "wb") as buffer:
             buffer.write(file.file.read())

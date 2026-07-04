@@ -112,6 +112,8 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     print("Ensemble pipeline trained and serialized successfully!")
 
 if __name__ == '__main__':
-    csv_path = "e:\\cs-training.csv"
-    output_dir = "e:\\Audit_Credit_Scoring_System\\backend\\app\\ml_assets"
+    # Dynamic relative path resolution (cross-platform compatible)
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    csv_path = os.path.join(BASE_DIR, "cs-training.csv")
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ml_assets")
     run_training_pipeline(csv_path, output_dir)
