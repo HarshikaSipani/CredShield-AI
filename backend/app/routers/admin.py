@@ -105,17 +105,20 @@ def update_fraud_rule(
 
 def run_retrain_script():
     try:
-        # Run python retraining script in background
-        script_path = os.path.join(
+        # Run training pipeline directly in-process to save 150MB+ RAM (prevents Render OOM)
+        from ..ml.train import run_training_pipeline
+        from ..services.model_service import model_service
+        
+        output_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "ml", "train.py"
+            "ml_assets"
         )
-        # Execute training script using the running Python interpreter path (works on Windows & Render/Linux)
-        subprocess.run([sys.executable, script_path], check=True)
-        print("Asynchronous model retraining completed successfully.")
+        
+        print("Starting in-process model retraining pipeline...")
+        run_training_pipeline(csv_path, output_dir)
+        print("In-process model retraining completed successfully.")
         
         # Reload newly generated binary models in memory
-        from ..services.model_service import model_service
         model_service._load_assets()
         print("Model assets reloaded successfully in server memory.")
     except Exception as e:

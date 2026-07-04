@@ -53,10 +53,16 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # 4. Apply SMOTE to training set
-    print("Applying SMOTE balancing...")
-    sm = SMOTE(random_state=42)
-    X_train_res, y_train_res = sm.fit_resample(X_train_scaled, y_train)
+    # 4. Apply SMOTE balancing if we have enough samples, otherwise use raw scaled data
+    # SMOTE requires at least 6 samples in the minority class by default (k_neighbors=5 + 1)
+    min_class_count = y_train.value_counts().min()
+    if min_class_count > 5:
+        print("Applying SMOTE balancing...")
+        sm = SMOTE(random_state=42)
+        X_train_res, y_train_res = sm.fit_resample(X_train_scaled, y_train)
+    else:
+        print(f"Skipping SMOTE balancing (minority class count {min_class_count} is too small for k-neighbors)...")
+        X_train_res, y_train_res = X_train_scaled, y_train
     
     # 5. Train Models
     print("Training Logistic Regression...")
