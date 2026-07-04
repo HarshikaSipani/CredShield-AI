@@ -15,6 +15,11 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     data = pd.read_csv(csv_path)
     data.drop(columns=['Unnamed: 0'], inplace=True, errors='ignore')
     
+    # Downsample dataset to 10,000 records to prevent Out-Of-Memory (OOM) on 512MB RAM limits
+    if len(data) > 10000:
+        print("Downsampling training data to 10,000 samples for RAM safety...")
+        data = data.sample(n=10000, random_state=42).reset_index(drop=True)
+    
     target = "SeriousDlqin2yrs"
     
     # 1. Store Medians for missing value handling in API
@@ -55,13 +60,13 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     
     # 5. Train Models
     print("Training Logistic Regression...")
-    lr = LogisticRegression(max_iter=2000)
+    lr = LogisticRegression(max_iter=1000)
     lr.fit(X_train_res, y_train_res)
     
     print("Training Random Forest...")
     rf = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=10,
+        n_estimators=100,
+        max_depth=8,
         random_state=42,
         n_jobs=-1
     )
@@ -70,9 +75,9 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     print("Training XGBoost...")
     scale_pos_weight = y_train.value_counts()[0] / y_train.value_counts()[1]
     xgb = XGBClassifier(
-        n_estimators=400,
-        learning_rate=0.03,
-        max_depth=6,
+        n_estimators=150,
+        learning_rate=0.05,
+        max_depth=5,
         subsample=0.8,
         colsample_bytree=0.8,
         scale_pos_weight=scale_pos_weight,
@@ -81,11 +86,9 @@ def run_training_pipeline(csv_path: str, output_dir: str):
     )
     xgb.fit(X_train_res, y_train_res)
     
-    # 6. Fit SHAP Explainer using a subset of background samples to optimize speed
-    print("Initializing SHAP Explainer...")
-    # Use TreeExplainer on Random Forest as background distribution representation
-    background_samples = shap.sample(X_train_scaled, 500)
-    explainer = shap.KernelExplainer(rf.predict_proba, background_samples)
+    # 6. Fit SHAP TreeExplainer on Random Forest for ultra-fast, memory-friendly explainability
+    print("Initializing SHAP TreeExplainer...")
+    explainer = shap.TreeExplainer(rf)
     
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
